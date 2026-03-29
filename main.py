@@ -1,4 +1,3 @@
-
 import asyncio
 import math
 import random
@@ -34,23 +33,24 @@ MERGE_COOLDOWN_FRAMES = 8      # prevent immediate double merges
 MERGE_DISTANCE_EPS = 0.5       # small overlap allowance
 SPAWN_COOLDOWN = 0.38          # seconds between spawns
 
-# Fruits: radius increases; colors are arbitrary but pleasant
-# Level 0..10 (last is "watermelon" like)
-FRUITS = [
-    ("cherry",   16, (235,  64,  52),  1),
-    ("strawb",   21, (255,  86, 126),  3),
-    ("grape",    26, (156,  77, 255),  6),
-    ("dekopon",  32, (255, 164,  46), 10),
-    ("orange",   39, (255, 126,  33), 15),
-    ("apple",    47, (210,  40,  70), 21),
-    ("pear",     56, (120, 210,  70), 28),
-    ("peach",    66, (255, 166, 180), 36),
-    ("pine",     78, (255, 220,  60), 45),
-    ("melon",    92, (120, 220, 170), 55),
-    ("water",   110, ( 70, 190,  90), 70),
+# DOGS: radius increases; colors are arbitrary but pleasant
+# Level 0..10
+# 追加: 画像パスを追加 (5要素: 名前, 半径, 色, スコア, 画像パス)
+DOGS = [
+    ("chihuahua",        16, (235,  64,  52),  1,  "images/chihuahua.png"),
+    ("pomeranian",       21, (255,  86, 126),  3,  "images/pomeranian.png"),
+    ("toy_poodle",       26, (156,  77, 255),  6,  "images/toy_poodle.png"),
+    ("yorkshire",        32, (255, 164,  46), 10,  "images/yorkshire.png"),
+    ("maltese",          39, (255, 126,  33), 15,  "images/maltese.png"),
+    ("papillon",         47, (210,  40,  70), 21,  "images/papillon.png"),
+    ("shih_tzu",         56, (120, 210,  70), 28,  "images/shih_tzu.png"),
+    ("dachshund",        66, (255, 166, 180), 36,  "images/dachshund.png"),
+    ("schnauzer",        78, (255, 220,  60), 45,  "images/schnauzer.png"),
+    ("pug",              92, (120, 220, 170), 55,  "images/pug.png"),
+    ("french_bulldog",   110, ( 70, 190,  90), 70, "images/french_bulldog.png"),
 ]
 
-# Spawn bag (smaller fruits more common)
+# Spawn bag (smaller DOGS more common)
 SPAWN_LEVELS = [0, 0, 1, 1, 2, 2, 3, 3, 4]
 
 BG = (18, 18, 24)
@@ -70,6 +70,7 @@ class Ball:
     r: float
     color: tuple
     score: int
+    image: pygame.Surface = None  # 追加: スケーリング済み画像
     merge_cd: int = 0  # frames until it can merge again
     id: int = 0        # for debugging / stable ordering
 
@@ -85,13 +86,51 @@ def draw_text(surface, font, txt, x, y, color=WHITE, align="topleft"):
     surface.blit(s, rect)
 
 
+IMAGE_CACHE = {}
+
+def load_scaled_image(img_path: str, diameter: int) -> pygame.Surface:
+    key = (img_path, diameter)
+    if key in IMAGE_CACHE:
+        return IMAGE_CACHE[key]
+
+    original = pygame.image.load(img_path).convert_alpha()
+    trimmed = trim_transparent(original)
+    squared = pad_to_square(trimmed)
+
+    # 画質を保ちたいので smoothscale 推奨
+    scaled = pygame.transform.smoothscale(squared, (diameter, diameter))
+    IMAGE_CACHE[key] = scaled
+    return scaled
+
+
+def pad_to_square(surf: pygame.Surface) -> pygame.Surface:
+    """画像を縦横比維持のまま、透明背景の正方形キャンバスに中央配置する"""
+    w, h = surf.get_size()
+    side = max(w, h)
+    out = pygame.Surface((side, side), pygame.SRCALPHA)
+    out.blit(surf, ((side - w) // 2, (side - h) // 2))
+    return out
+
+
+def trim_transparent(surf: pygame.Surface) -> pygame.Surface:
+    """alpha>0 の領域で最小矩形に切り抜く"""
+    rect = surf.get_bounding_rect(min_alpha=1)
+    if rect.width == 0 or rect.height == 0:
+        return surf
+    return surf.subsurface(rect).copy()
+
+
 def make_ball(x, y, level, ball_id):
-    _name, r, color, sc = FRUITS[level]
+    name, r, color, sc, img_path = DOGS[level]  # 変更: 画像パスを取得
+    diameter = int(r * 2)
+    scaled_image = load_scaled_image(img_path, diameter)
+
     return Ball(
         x=float(x), y=float(y),
         vx=0.0, vy=0.0,
         level=level, r=float(r),
         color=color, score=sc,
+        image=scaled_image,
         merge_cd=0, id=ball_id
     )
 
@@ -300,7 +339,7 @@ async def main():
 
                         dist = math.hypot(b.x - a.x, b.y - a.y)
                         if dist <= a.r + b.r + 0.5:
-                            if a.level < len(FRUITS) - 1:
+                            if a.level < len(DOGS) - 1:
                                 new_level = a.level + 1
                                 nx = (a.x + b.x) * 0.5
                                 ny = (a.y + b.y) * 0.5
@@ -365,16 +404,26 @@ async def main():
 
         # preview next fruit at drop position
         if not gameover:
-            name, r, color, _sc = FRUITS[next_level]
+            name, r, color, _sc, img_path = DOGS[next_level]
             px = clamp(drop_x, WALL + r + 2, W - WALL - r - 2)
-            pygame.draw.circle(screen, color, (int(px), int(CEIL_Y + 30)), int(r))
+            
+            scaled_preview = load_scaled_image(img_path, int(r * 2))
+            img_rect = scaled_preview.get_rect(center=(int(px), int(CEIL_Y + 30)))
+            screen.blit(scaled_preview, img_rect)
+
             pygame.draw.circle(screen, (255, 255, 255), (int(px), int(CEIL_Y + 30)), int(r), 2)
             draw_text(screen, font2, f"NEXT: {name}", 18, 46, GRAY, "topleft")
 
         # balls
         for b in balls:
-            pygame.draw.circle(screen, b.color, (int(b.x), int(b.y)), int(b.r))
-            pygame.draw.circle(screen, (255, 255, 255), (int(b.x), int(b.y)), int(b.r), 2)
+            if b.image:
+                # 画像の中心をボールの位置に合わせる
+                img_rect = b.image.get_rect(center=(int(b.x), int(b.y)))
+                screen.blit(b.image, img_rect)
+            else:
+                # フォールバック: 円描画
+                pygame.draw.circle(screen, b.color, (int(b.x), int(b.y)), int(b.r))
+                pygame.draw.circle(screen, (255, 255, 255), (int(b.x), int(b.y)), int(b.r), 2)
 
         # UI
         draw_text(screen, font, f"SCORE: {score}", 18, 18, WHITE, "topleft")
@@ -382,7 +431,7 @@ async def main():
 
         if not started:
             draw_text(screen, big, "CLICK TO START", W // 2, H // 2 - 10, WHITE, "center")
-            draw_text(screen, font2, "Drop fruits and merge same ones!", W // 2, H // 2 + 38, GRAY, "center")
+            draw_text(screen, font2, "Drop DOGS and merge same ones!", W // 2, H // 2 + 38, GRAY, "center")
 
         if gameover:
             alpha = 110 + int(60 * math.sin(gameover_flash * 6.0))
