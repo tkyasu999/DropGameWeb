@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pygame
 
 # ----------------------------
-# Suika-like (Watermelon) Game
+# Drop Dogs Game
 # - Pure pygame (no native physics libs)
 # - pygbag-friendly async main loop
 # ----------------------------
@@ -19,9 +19,9 @@ FPS = 60
 WALL = 18
 FLOOR_Y = H - 24
 CEIL_Y = 80  # top margin for UI
-GAMEOVER_LINE_Y = 140  # if a fruit crosses this line -> game over
+GAMEOVER_LINE_Y = 140  # if a dog crosses this line -> game over
 
-# Physics constants (tuned for "suika-ish" feel)
+# Physics constants
 GRAVITY = 1700.0               # px/s^2
 AIR_DAMPING = 0.999            # per-step damping
 RESTITUTION = 0.12             # bounciness
@@ -220,7 +220,7 @@ def pick_next_level():
 
 async def main():
     pygame.init()
-    pygame.display.set_caption("Suika (pygbag) - Pure pygame")
+    pygame.display.set_caption("Drop Dogs")
     screen = pygame.display.set_mode((W, H))
     clock = pygame.time.Clock()
 
