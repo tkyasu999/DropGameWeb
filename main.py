@@ -15,6 +15,9 @@ import pygame
 W, H = 480, 820
 FPS = 60
 
+# Ball scale (全体のボールサイズを調整)
+BALL_SCALE = 1.2
+
 # Playfield walls
 WALL = 18
 FLOOR_Y = H - 24
@@ -121,14 +124,15 @@ def trim_transparent(surf: pygame.Surface) -> pygame.Surface:
 
 
 def make_ball(x, y, level, ball_id):
-    name, r, color, sc, img_path = DOGS[level]  # 変更: 画像パスを取得
+    name, base_r, color, sc, img_path = DOGS[level]
+    r = base_r * BALL_SCALE  # スケール適用
     diameter = int(r * 2)
     scaled_image = load_scaled_image(img_path, diameter)
 
     return Ball(
         x=float(x), y=float(y),
         vx=0.0, vy=0.0,
-        level=level, r=float(r),
+        level=level, r=float(r),  # r をスケール済みに
         color=color, score=sc,
         image=scaled_image,
         merge_cd=0, id=ball_id
@@ -271,7 +275,9 @@ async def main():
 
             if event.type == pygame.MOUSEMOTION:
                 mx, _my = event.pos
-                drop_x = clamp(mx, WALL + 20, W - WALL - 20)
+                # 現在の next_level の r を考慮（動的に）
+                next_r = DOGS[next_level][1] * BALL_SCALE
+                drop_x = clamp(mx, WALL + next_r + 2, W - WALL - next_r - 2)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if gameover:
@@ -404,8 +410,9 @@ async def main():
 
         # preview next fruit at drop position
         if not gameover:
-            name, r, color, _sc, img_path = DOGS[next_level]
-            px = clamp(drop_x, WALL + r + 2, W - WALL - r - 2)
+            name, base_r, color, _sc, img_path = DOGS[next_level]
+            r = base_r * BALL_SCALE  # スケール適用
+            px = clamp(drop_x, WALL + r + 2, W - WALL - r - 2)  # r を考慮したクランプ
             
             scaled_preview = load_scaled_image(img_path, int(r * 2))
             img_rect = scaled_preview.get_rect(center=(int(px), int(CEIL_Y + 30)))
